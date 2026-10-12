@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { app } from "../../appDef.js";
+
+import { privacyPolicyGet, termsOfServiceGet } from "./index.js";
 
 describe("public legal pages", () => {
   test("serves the privacy policy without an account", async () => {
-    const response = await app.request("/legal/privacy-policy");
+    const response = privacyPolicyGet();
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -13,7 +14,7 @@ describe("public legal pages", () => {
   });
 
   test("serves the Terms of Service without an account", async () => {
-    const response = await app.request("/legal/terms-of-service");
+    const response = termsOfServiceGet();
     const html = await response.text();
 
     expect(response.status).toBe(200);

@@ -1,7 +1,13 @@
-import { Hono } from "hono";
 import { PRIVACY_POLICY_HTML, TERMS_OF_SERVICE_HTML } from "./legal-pages.js";
 
-export const legalRouter = new Hono();
+function htmlPage(body: string): Response {
+  return new Response(body, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
 
-legalRouter.get("/privacy-policy", (c) => c.html(PRIVACY_POLICY_HTML));
-legalRouter.get("/terms-of-service", (c) => c.html(TERMS_OF_SERVICE_HTML));
+export function privacyPolicyGet(): Response {
+  return htmlPage(PRIVACY_POLICY_HTML);
+}
+
+export function termsOfServiceGet(): Response {
+  return htmlPage(TERMS_OF_SERVICE_HTML);
+}
