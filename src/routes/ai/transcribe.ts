@@ -1,5 +1,5 @@
 import { openRouterApiKey } from "../../lib/env.js";
-import { getUserIdOrNull } from "../../lib/session.js";
+import { getUserIdOrNull, signInRequired } from "../../lib/session.js";
 import { openrouterFetchWithTimeout } from "../../lib/ai/functions.js";
 import {
   AI_AUDIO_MODEL,
@@ -53,7 +53,7 @@ async function transcribeOnce(clip: { data: string; format: string }): Promise<A
 
 export async function transcribePost(request: Request): Promise<Response> {
   const userId = await getUserIdOrNull(request);
-  if (!userId) return Response.json({ error: "You need to sign in first." }, { status: 401 });
+  if (!userId) return signInRequired();
   try {
     if (!openRouterApiKey()) return Response.json(transcribeFailure(AI_SAYS.failed, 0, "OPENROUTER_API_KEY is not set."));
     const body = await jsonBody(request);

@@ -1,6 +1,6 @@
-import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
 import { getDb, robinMemory } from "../../lib/db/index.js";
+import { getUserId, signInRequired } from "../../lib/session.js";
 
 const memoryColumns = {
   id: robinMemory.id,
@@ -8,28 +8,32 @@ const memoryColumns = {
   content: robinMemory.content,
 };
 
-export const memoryRouter = new Hono();
-
-memoryRouter.get("/memory", async (c) => {
+export async function memoryGet(request: Request): Promise<Response> {
+  const userId = await getUserId(request);
+  if (!userId) return signInRequired();
   const rows = await getDb()
     .select(memoryColumns)
     .from(robinMemory)
-    .where(eq(robinMemory.userId, c.get("userId")))
+    .where(eq(robinMemory.userId, userId))
     .orderBy(desc(robinMemory.createdAt))
     .limit(40);
-  return c.json(rows);
-});
+  return Response.json(rows);
+}
 
-memoryRouter.post("/memory", async (c) => {
-  const body = await c.req.json<{ kind?: string | null; content?: string | null }>();
+export async function memoryPost(request: Request): Promise<Response> {
+  const userId = await getUserId(request);
+  if (!userId) return signInRequired();
+  const body = (await request.json()) as { kind?: string | null; content?: string | null };
   const rows = await getDb()
     .insert(robinMemory)
-    .values({ userId: c.get("userId"), kind: body.kind ?? null, content: body.content ?? null })
+    .values({ userId, kind: body.kind ?? null, content: body.content ?? null })
     .returning({ id: robinMemory.id });
-  return c.json(rows[0]);
-});
+  return Response.json(rows[0]);
+}
 
-memoryRouter.delete("/memory", async (c) => {
-  await getDb().delete(robinMemory).where(eq(robinMemory.userId, c.get("userId")));
-  return c.json({ ok: true });
-});
+export async function memoryDelete(request: Request): Promise<Response> {
+  const userId = await getUserId(request);
+  if (!userId) return signInRequired();
+  await getDb().delete(robinMemory).where(eq(robinMemory.userId, userId));
+  return Response.json({ ok: true });
+}

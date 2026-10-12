@@ -1,7 +1,19 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { app } from "../appDef.js";
+import { auth } from "../lib/auth.js";
+import { chatPost } from "./ai/chat.js";
+import { memoryDelete, memoryGet, memoryPost } from "./data/memory.js";
+import { profileGet, profilePut } from "./data/profile.js";
+import { profilesPut } from "./data/profiles.js";
+import {
+  sessionGet,
+  sessionPatch,
+  sessionsDelete,
+  sessionsOpenGet,
+  sessionsPost,
+  sessionsRecentGet,
+} from "./data/sessions.js";
 import {
   getDb,
   learnerProfiles,
@@ -48,8 +60,31 @@ type CallResult = {
   response: Response;
 };
 
+async function dispatch(pathname: string, init?: RequestInit): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const request = new Request(new URL(pathname, origin), init);
+  if (pathname.startsWith("/api/auth/")) return auth.handler(request);
+  if (pathname === "/api/data/profile") return method === "PUT" ? profilePut(request) : profileGet(request);
+  if (pathname === "/api/data/profiles") return profilesPut(request);
+  if (pathname === "/api/data/sessions") return method === "DELETE" ? sessionsDelete(request) : sessionsPost(request);
+  if (pathname === "/api/data/sessions/open") return sessionsOpenGet(request);
+  if (pathname === "/api/data/sessions/recent") return sessionsRecentGet(request);
+  const sessionMatch = /^\/api\/data\/sessions\/([^/]+)$/.exec(pathname);
+  if (sessionMatch) {
+    const params = Promise.resolve({ id: sessionMatch[1] });
+    return method === "PATCH" ? sessionPatch(request, { params }) : sessionGet(request, { params });
+  }
+  if (pathname === "/api/data/memory") {
+    if (method === "POST") return memoryPost(request);
+    if (method === "DELETE") return memoryDelete(request);
+    return memoryGet(request);
+  }
+  if (pathname === "/api/ai/chat") return chatPost(request);
+  throw new Error(`unhandled test route ${method} ${pathname}`);
+}
+
 async function call(path: string, init?: RequestInit): Promise<CallResult> {
-  const response = await app.request(path, init);
+  const response = await dispatch(new URL(path, origin).pathname, init);
   const body = await response.text();
   return { status: response.status, body, response };
 }

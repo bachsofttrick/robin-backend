@@ -2,7 +2,7 @@ import { OpenRouterCore } from "@openrouter/sdk/core";
 import { chatSend } from "@openrouter/sdk/funcs/chatSend";
 import type { ChatRequest } from "@openrouter/sdk/models";
 import { openRouterApiKey } from "../../lib/env.js";
-import { getUserIdOrNull } from "../../lib/session.js";
+import { getUserIdOrNull, signInRequired } from "../../lib/session.js";
 import {
   AI_SAYS,
   AI_TIMEOUT_MS,
@@ -185,7 +185,7 @@ async function chatOnce(body: {
 
 export async function chatPost(request: Request): Promise<Response> {
   const userId = await getUserIdOrNull(request);
-  if (!userId) return Response.json({ error: "You need to sign in first." }, { status: 401 });
+  if (!userId) return signInRequired();
   try {
     const body = await jsonBody(request);
     if (!openRouterApiKey()) return Response.json(chatFailure(AI_SAYS.failed, 0, { detail: "OPENROUTER_API_KEY is not set." }));

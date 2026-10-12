@@ -1,5 +1,5 @@
-import { Hono } from "hono";
 import { getDb, profiles } from "../../lib/db/index.js";
+import { getUserId, signInRequired } from "../../lib/session.js";
 
 const fullProfileColumns = {
   id: profiles.id,
@@ -9,14 +9,14 @@ const fullProfileColumns = {
   updated_at: profiles.updatedAt,
 };
 
-export const profilesRouter = new Hono();
-
-profilesRouter.put("/profiles", async (c) => {
-  const body = await c.req.json<{
+export async function profilesPut(request: Request): Promise<Response> {
+  const userId = await getUserId(request);
+  if (!userId) return signInRequired();
+  const body = (await request.json()) as {
     email?: string | null;
     display_name?: string | null;
     avatar_url?: string | null;
-  }>();
+  };
   const values = {
     email: body.email ?? null,
     displayName: body.display_name ?? null,
@@ -25,8 +25,8 @@ profilesRouter.put("/profiles", async (c) => {
   };
   const rows = await getDb()
     .insert(profiles)
-    .values({ id: c.get("userId"), ...values })
+    .values({ id: userId, ...values })
     .onConflictDoUpdate({ target: profiles.id, set: values })
     .returning(fullProfileColumns);
-  return c.json(rows[0]);
-});
+  return Response.json(rows[0]);
+}

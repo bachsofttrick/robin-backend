@@ -1,5 +1,5 @@
 import { borelAiUrl } from "../../lib/env.js";
-import { getUserIdOrNull } from "../../lib/session.js";
+import { getUserIdOrNull, signInRequired } from "../../lib/session.js";
 import { borelFetchWithTimeout } from "../../lib/ai/functions.js";
 import {
   AI_SAYS,
@@ -10,7 +10,7 @@ import {
 
 export async function generationsPost(request: Request): Promise<Response> {
   const userId = await getUserIdOrNull(request);
-  if (!userId) return Response.json({ error: "You need to sign in first." }, { status: 401 });
+  if (!userId) return signInRequired();
   try {
     if (!borelAiUrl()) return Response.json({ url: null, error: AI_SAYS.picture, status: 0, reason: null, reused: null } satisfies AiImageResult);
     const body = await jsonBody(request);
