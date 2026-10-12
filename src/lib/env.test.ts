@@ -1,0 +1,160 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+import {
+  authSecret,
+  baseUrl,
+  databaseUrl,
+  mailConfig,
+  port,
+  trustedOrigins,
+} from "./env.js";
+
+const ENV_KEYS = [
+  "PGUSER",
+  "PGPASSWORD",
+  "PGHOST",
+  "PGDATABASE",
+  "BETTER_AUTH_URL",
+  "BETTER_AUTH_SECRET",
+  "TRUSTED_ORIGINS",
+  "MAIL_PROVIDER",
+  "MAIL_API_KEY",
+  "MAIL_FROM",
+  "PORT",
+  "NODE_ENV",
+] as const;
+
+function runEnvProbe(expression: string, env: Record<string, string | undefined>) {
+  const script =
+    "const { authSecret, databaseUrl } = await import('./env.js');" +
+    expression +
+    "process.exit(0);";
+  return Bun.spawnSync({
+    cmd: ["bun", "--no-env-file", "-e", script],
+    cwd: new URL(".", import.meta.url).pathname,
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
+
+let saved: Record<string, string | undefined>;
+
+beforeEach(() => {
+  saved = {};
+  for (const key of ENV_KEYS) saved[key] = process.env[key];
+  for (const key of ENV_KEYS) delete process.env[key];
+});
+
+afterEach(() => {
+  for (const key of ENV_KEYS) {
+    if (saved[key] === undefined) delete process.env[key];
+    else process.env[key] = saved[key];
+  }
+});
+
+describe("databaseUrl", () => {
+  test("composes a connection string from PG variables with encoded credentials", () => {
+    process.env.PGUSER = "user name";
+    process.env.PGPASSWORD = "p@ss:word";
+    process.env.PGHOST = "db.example.com";
+    process.env.PGDATABASE = "app";
+
+    expect(databaseUrl()).toBe(
+      "postgresql://user%20name:p%40ss%3Aword@db.example.com:5432/app?sslmode=verify-full",
+    );
+  });
+
+  test("exits non-zero naming the variables when database variables are absent", () => {
+    const env: Record<string, string | undefined> = { ...process.env };
+    for (const key of ["PGUSER", "PGPASSWORD", "PGHOST", "PGDATABASE"]) delete env[key];
+
+    const result = runEnvProbe("databaseUrl();", env);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(new TextDecoder().decode(result.stderr)).toContain("PGHOST");
+  });
+});
+
+describe("baseUrl", () => {
+  test("defaults to http://localhost:3000", () => {
+    expect(baseUrl()).toBe("http://localhost:3000");
+  });
+
+  test("honours BETTER_AUTH_URL", () => {
+    process.env.BETTER_AUTH_URL = "https://api.example.com";
+    expect(baseUrl()).toBe("https://api.example.com");
+  });
+});
+
+describe("port", () => {
+  test("defaults to 3000", () => {
+    expect(port()).toBe(3000);
+  });
+
+  test("honours PORT", () => {
+    process.env.PORT = "8080";
+    expect(port()).toBe(8080);
+  });
+});
+
+describe("trustedOrigins", () => {
+  test("splits TRUSTED_ORIGINS on commas and trims whitespace", () => {
+    process.env.TRUSTED_ORIGINS = "https://a.example.com, https://b.example.com ,https://c.example.com";
+    expect(trustedOrigins()).toEqual([
+      "https://a.example.com",
+      "https://b.example.com",
+      "https://c.example.com",
+    ]);
+  });
+
+  test("falls back to [baseUrl()] when TRUSTED_ORIGINS is unset", () => {
+    expect(trustedOrigins()).toEqual([baseUrl()]);
+  });
+
+  test("falls back to [baseUrl()] when TRUSTED_ORIGINS is blank", () => {
+    process.env.TRUSTED_ORIGINS = " , ";
+    expect(trustedOrigins()).toEqual([baseUrl()]);
+  });
+});
+
+describe("authSecret", () => {
+  test("returns BETTER_AUTH_SECRET when set", () => {
+    process.env.BETTER_AUTH_SECRET = "real-secret";
+    expect(authSecret()).toBe("real-secret");
+  });
+
+  test("returns the dev constant when NODE_ENV is not production", () => {
+    process.env.NODE_ENV = "development";
+    expect(authSecret()).toBe("robin-talks-dev-secret-not-for-production");
+  });
+
+  test("exits non-zero when NODE_ENV is production and the variable is unset", () => {
+    const env: Record<string, string | undefined> = { ...process.env, NODE_ENV: "production" };
+    delete env.BETTER_AUTH_SECRET;
+
+    const result = runEnvProbe("authSecret();", env);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(new TextDecoder().decode(result.stderr)).toContain("BETTER_AUTH_SECRET");
+  });
+});
+
+describe("mailConfig", () => {
+  test("reads MAIL_* variables", () => {
+    process.env.MAIL_PROVIDER = "resend";
+    process.env.MAIL_API_KEY = "key-123";
+    process.env.MAIL_FROM = "Robin <hi@example.com>";
+
+    expect(mailConfig()).toEqual({
+      provider: "resend",
+      apiKey: "key-123",
+      from: "Robin <hi@example.com>",
+    });
+  });
+
+  test("returns an empty object and never throws when MAIL_* are absent", () => {
+    expect(() => mailConfig()).not.toThrow();
+    expect(mailConfig()).toEqual({});
+  });
+});
