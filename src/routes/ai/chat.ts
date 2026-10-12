@@ -1,8 +1,8 @@
-import { Hono } from "hono";
 import { OpenRouterCore } from "@openrouter/sdk/core";
 import { chatSend } from "@openrouter/sdk/funcs/chatSend";
 import type { ChatRequest } from "@openrouter/sdk/models";
 import { openRouterApiKey } from "../../lib/env.js";
+import { getUserIdOrNull } from "../../lib/session.js";
 import {
   AI_SAYS,
   AI_TIMEOUT_MS,
@@ -183,15 +183,15 @@ async function chatOnce(body: {
   }
 }
 
-export const chatRouter = new Hono();
-
-chatRouter.post("/chat", async (c) => {
+export async function chatPost(request: Request): Promise<Response> {
+  const userId = await getUserIdOrNull(request);
+  if (!userId) return Response.json({ error: "You need to sign in first." }, { status: 401 });
   try {
-    const body = await jsonBody(c);
-    if (!openRouterApiKey()) return c.json(chatFailure(AI_SAYS.failed, 0, { detail: "OPENROUTER_API_KEY is not set." }));
+    const body = await jsonBody(request);
+    if (!openRouterApiKey()) return Response.json(chatFailure(AI_SAYS.failed, 0, { detail: "OPENROUTER_API_KEY is not set." }));
     const model = typeof body.model === "string" ? body.model : DEFAULT_MODEL;
     if (!MODEL_ALLOWLIST.has(model)) {
-      return c.json(chatFailure(AI_SAYS.badModel, 400, { detail: `model "${model}" is not on the allowlist` }));
+      return Response.json(chatFailure(AI_SAYS.badModel, 400, { detail: `model "${model}" is not on the allowlist` }));
     }
     const messages: ChatMessage[] = Array.isArray(body.messages) ? body.messages : [];
     const schema = body.jsonSchema;
@@ -209,25 +209,25 @@ chatRouter.post("/chat", async (c) => {
           },
         }
       : undefined;
-    const request = {
+    const chatBody = {
       model,
       messages,
       temperature: typeof body.temperature === "number" ? body.temperature : undefined,
       max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : undefined,
       response_format,
     };
-    if (!jsonSchema) return c.json(await chatOnce(request));
+    if (!jsonSchema) return Response.json(await chatOnce(chatBody));
     let last: AiChatResult = chatFailure(AI_SAYS.unreadable, 0);
     for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await chatOnce(request);
-      if (r.error) return c.json(r);
-      if (r.truncated) return c.json({ ...r, error: AI_SAYS.tooLong, detail: "The answer reached max_tokens and was cut off." });
+      const r = await chatOnce(chatBody);
+      if (r.error) return Response.json(r);
+      if (r.truncated) return Response.json({ ...r, error: AI_SAYS.tooLong, detail: "The answer reached max_tokens and was cut off." });
       const read = readJson(r.text);
-      if (read.ok) return c.json({ ...r, data: read.value });
+      if (read.ok) return Response.json({ ...r, data: read.value });
       last = { ...r, error: AI_SAYS.unreadable, detail: "The answer was not valid JSON." };
     }
-    return c.json(last);
+    return Response.json(last);
   } catch (err) {
-    return c.json(chatFailure(AI_SAYS.failed, 0, { detail: err instanceof Error ? err.message : null }));
+    return Response.json(chatFailure(AI_SAYS.failed, 0, { detail: err instanceof Error ? err.message : null }));
   }
-});
+}

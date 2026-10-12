@@ -1,5 +1,5 @@
-import { Hono } from "hono";
 import { openRouterApiKey } from "../../lib/env.js";
+import { getUserIdOrNull } from "../../lib/session.js";
 import { openrouterFetchWithTimeout } from "../../lib/ai/functions.js";
 import {
   AI_AUDIO_MODEL,
@@ -51,22 +51,22 @@ async function transcribeOnce(clip: { data: string; format: string }): Promise<A
   }
 }
 
-export const transcribeRouter = new Hono();
-
-transcribeRouter.post("/transcribe", async (c) => {
+export async function transcribePost(request: Request): Promise<Response> {
+  const userId = await getUserIdOrNull(request);
+  if (!userId) return Response.json({ error: "You need to sign in first." }, { status: 401 });
   try {
-    if (!openRouterApiKey()) return c.json(transcribeFailure(AI_SAYS.failed, 0, "OPENROUTER_API_KEY is not set."));
-    const body = await jsonBody(c);
+    if (!openRouterApiKey()) return Response.json(transcribeFailure(AI_SAYS.failed, 0, "OPENROUTER_API_KEY is not set."));
+    const body = await jsonBody(request);
     const audio = body.audio && typeof body.audio === "object" ? body.audio : {};
     const clip = {
       data: typeof audio.data === "string" ? audio.data : "",
       format: typeof audio.format === "string" ? audio.format : "",
     };
     const stripped = base64Body(clip.data);
-    if (stripped.length > MAX_AUDIO_BASE64) return c.json(transcribeFailure(RECORDING_TOO_LONG, 0, "The recording exceeded the 3 MB audio cap."));
-    if (!stripped.trim()) return c.json(transcribeFailure(AI_SAYS.noSpeech, 0, "The recording had no audio in it."));
-    return c.json(await transcribeOnce(clip));
+    if (stripped.length > MAX_AUDIO_BASE64) return Response.json(transcribeFailure(RECORDING_TOO_LONG, 0, "The recording exceeded the 3 MB audio cap."));
+    if (!stripped.trim()) return Response.json(transcribeFailure(AI_SAYS.noSpeech, 0, "The recording had no audio in it."));
+    return Response.json(await transcribeOnce(clip));
   } catch (err) {
-    return c.json(transcribeFailure(AI_SAYS.failed, 0, err instanceof Error ? err.message : null));
+    return Response.json(transcribeFailure(AI_SAYS.failed, 0, err instanceof Error ? err.message : null));
   }
-});
+}

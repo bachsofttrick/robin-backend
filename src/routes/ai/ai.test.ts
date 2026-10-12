@@ -39,7 +39,10 @@ mock.module("../../lib/auth.js", () => ({
   },
 }));
 
-const { aiRouter } = await import("./index.js");
+const { chatPost } = await import("./chat.js");
+const { transcribePost } = await import("./transcribe.js");
+const { generationsPost } = await import("./generations.js");
+const { editsPost } = await import("./edits.js");
 
 const SIGN_IN_BODY = { error: "You need to sign in first." };
 
@@ -99,11 +102,16 @@ function sessionStoreDown(): void {
 }
 
 async function post(path: string, payload?: unknown, headers?: Record<string, string>): Promise<Response> {
-  return await aiRouter.request(path, {
+  const request = new Request("http://localhost" + path, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
+  if (path === "/chat") return chatPost(request);
+  if (path === "/transcribe") return transcribePost(request);
+  if (path === "/images/generations") return generationsPost(request);
+  if (path === "/images/edits") return editsPost(request);
+  throw new Error(`unhandled path ${path}`);
 }
 
 const CHAT_OK_VALUE = { choices: [{ message: { content: "Hello there." }, finishReason: "stop" }] };
@@ -176,11 +184,11 @@ async function setEnv(key: string, value: string): Promise<void> {
 }
 
 describe("smoke: the real module with default implementations", () => {
-  test("aiRouter is built at import time and answers 401 without a session", async () => {
-    expect(aiRouter).toBeDefined();
+  test("chatPost is built at import time and answers 401 without a session", async () => {
+    expect(chatPost).toBeDefined();
     sessionImpl = null;
     await withoutEnv(ENV_KEYS, async () => {
-      const response = await post("/health");
+      const response = await post("/chat", {});
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual(SIGN_IN_BODY);
     });

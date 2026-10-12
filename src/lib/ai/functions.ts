@@ -1,4 +1,3 @@
-import type { Context } from "hono";
 import { borelAiUrl } from "../env.js";
 import {
   AI_SAYS,
@@ -99,9 +98,9 @@ export async function borelFetchWithTimeout(url: string, init: RequestInit, time
   }
 }
 
-export async function jsonBody(c: Context): Promise<Loose> {
+export async function jsonBody(request: Request): Promise<Loose> {
   try {
-    const body = await c.req.json();
+    const body = await request.json();
     return body && typeof body === "object" ? body : {};
   } catch {
     return {};
