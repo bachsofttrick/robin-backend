@@ -1,0 +1,26 @@
+annotations:
+  anybuild.run/config:
+    bun_version: 1.4.2
+    commands:
+      start: node dist/index.js
+    edgejs_enable: true
+    edgejs_precompile: true
+    name: out
+    node_build_command: bun run build
+    node_install_inputs:
+    - package.json
+    node_package_manager: bun
+    node_package_name: '@robin-talks/backend'
+    node_remove_native_binaries: true
+    node_server: hono
+  anybuild.run/provider: node
+  anybuild.run/version: 0.33.0
+  wasmer.io/version: 7.5.0
+app_id: da_n73IatAUWZPY
+kind: wasmer.io/App.v0
+name: robin-backend
+owner: bachphan
+package: sha256:af0bad81ee9072ad755520d13bc08148b8308330402e7a1b4e99a18ece49c3c1
+locality:
+  regions:
+  - us-hillsboro
